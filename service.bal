@@ -1,6 +1,7 @@
 import ballerina/http;
 import ballerina/regex;
 import ballerina/io;
+import ballerina/log;
 
 //Import the SCIM module.
 import ballerinax/scim;
@@ -90,10 +91,12 @@ service / on new http:Listener(9090) {
 
     resource function get searchProfile(string email) returns json|error {
         
+        log:printInfo("Search Profile: " + email + " ===============================");
         string userName = string `DEFAULT/${email}`;
-        scim:UserSearch searchData = {filter: string `userName eq ${userName}`};
+        scim:UserSearch searchData = { filter: string `userName eq ${userName}`, schemas: [] };
         scim:UserResponse|scim:ErrorResponse|error response = scimClient->searchUser(searchData);
         if response is scim:UserResponse {
+            log:printInfo(response.toString());
             scim:UserResource[] userResources = response.Resources ?: [];
             scim:UserResource user = userResources[0];
             return {
@@ -102,6 +105,7 @@ service / on new http:Listener(9090) {
                 lastName: user.name?.familyName
             };
         } else if response is scim:ErrorResponse {
+            log:printInfo(response.toString());
             return {
                 errorCode: response.detail().status,
                 message: response.detail().detail
