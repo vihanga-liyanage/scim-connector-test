@@ -84,7 +84,22 @@ service / on new http:Listener(9090) {
         else {
             groupId = defaultGroupId;
         }
-        scim:GroupPatch Group = {Operations: [{op: "add", value: {members: [{"value": createdUser, "display": user.userName}]}}]};
+        scim:GroupPatch Group = { 
+            Operations: [
+                { 
+                    op: "add",
+                    value: {
+                        members: [ 
+                            {
+                                "value": createdUser, 
+                                "display": user.userName
+                            }
+                        ]
+                    }
+                }
+            ],
+            schemas: [ "urn:ietf:params:scim:api:messages:2.0:PatchOp" ]
+        };
         scim:GroupResource groupResponse = check scimClient->patchGroup(groupId, Group);
         return "User Successfully Created";
     }
@@ -93,26 +108,14 @@ service / on new http:Listener(9090) {
         
         log:printInfo("Get All Users ===============================");
 
-        scim:UserResponse|scim:ErrorResponse|error response = scimClient->getUsers();
-        if response is scim:UserResponse {
-            log:printInfo(response.toString());
-            scim:UserResource[] userResources = response.Resources ?: [];
-            scim:UserResource user = userResources[0];
-            return {
-                email: user.userName,
-                firstName: user.name?.givenName,
-                lastName: user.name?.familyName
-            };
-        } else if response is scim:ErrorResponse {
-            log:printInfo(response.toString());
-            return {
-                errorCode: response.detail().status,
-                message: response.detail().detail
-            };
-        }
+        scim:UserResponse response = check scimClient->getUsers();
+        log:printInfo(response.toString());
+        scim:UserResource[] userResources = response.Resources ?: [];
+        scim:UserResource user = userResources[0];
         return {
-            errorCode: 500,
-            message: "Unknown error occurred"
+            email: user.userName,
+            firstName: user.name?.givenName,
+            lastName: user.name?.familyName
         };
     }
 
@@ -120,23 +123,15 @@ service / on new http:Listener(9090) {
         
         log:printInfo("Search Profile: " + email + " ===============================");
         string userName = string `DEFAULT/${email}`;
-        scim:UserSearch searchData = { filter: string `userName eq ${userName}` };
-        scim:UserResponse|scim:ErrorResponse|error response = scimClient->searchUser(searchData);
+        scim:UserSearch searchData = { filter: string `userName eq ${userName}`, schemas: ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"] };
+
+        scim:UserResponse response = check scimClient->searchUser(searchData);
         if response is scim:UserResponse {
             log:printInfo(response.toString());
             scim:UserResource[] userResources = response.Resources ?: [];
-            return userResources;
-        } else if response is scim:ErrorResponse {
-            log:printInfo(response.toString());
-            return {
-                errorCode: response.detail().status,
-                message: response.detail().detail
-            };
+
+            return userResources.toJson();
         }
-        return {
-            errorCode: 500,
-            message: "Unknown error occurred"
-        };
     }
 
     resource function delete deleteUser(string email) returns json|error {
@@ -144,25 +139,14 @@ service / on new http:Listener(9090) {
         // Get user ID
         string userId = "";
         string userName = string `DEFAULT/${email}`;
-        scim:UserSearch searchData = {filter: string `userName eq ${userName}`};
-        scim:UserResponse|scim:ErrorResponse|error response = scimClient->searchUser(searchData);
-        if response is scim:UserResponse {
-            scim:UserResource[] userResources = response.Resources ?: [];
-            scim:UserResource user = userResources[0];
-            userId = user.id ?: "";
-        } else if response is scim:ErrorResponse {
-            return {
-                errorCode: response.detail().status,
-                message: response.detail().detail
-            };
-        } else {
-            return {
-                errorCode: 500,
-                message: "Unknown error occurred"
-            };
-        }
+        scim:UserSearch searchData = {filter: string `userName eq ${userName}`, schemas: ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"]};
+        scim:UserResponse response = check scimClient->searchUser(searchData);
+        scim:UserResource[] userResources = response.Resources ?: [];
+        scim:UserResource user = userResources[0];
+        userId = user.id ?: "";
+
         if (userId != "") {
-            scim:ErrorResponse|error? deleteResponse = scimClient->deleteUser(userId);
+            json|error deleteResponse = scimClient->deleteUser(userId);
             if !(deleteResponse is error) {
                 return {
                     status: "success",
