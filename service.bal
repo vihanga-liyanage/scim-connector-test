@@ -125,12 +125,7 @@ service / on new http:Listener(9090) {
         if response is scim:UserResponse {
             log:printInfo(response.toString());
             scim:UserResource[] userResources = response.Resources ?: [];
-            scim:UserResource user = userResources[0];
-            return {
-                email: user.userName,
-                firstName: user.name?.givenName,
-                lastName: user.name?.familyName
-            };
+            return userResources;
         } else if response is scim:ErrorResponse {
             log:printInfo(response.toString());
             return {
