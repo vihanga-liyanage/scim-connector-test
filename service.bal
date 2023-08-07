@@ -89,11 +89,38 @@ service / on new http:Listener(9090) {
         return "User Successfully Created";
     }
 
+    resource function get getAllUsers() returns json|error {
+        
+        log:printInfo("Get All Users ===============================");
+
+        scim:UserResponse|scim:ErrorResponse|error response = scimClient->getUsers();
+        if response is scim:UserResponse {
+            log:printInfo(response.toString());
+            scim:UserResource[] userResources = response.Resources ?: [];
+            scim:UserResource user = userResources[0];
+            return {
+                email: user.userName,
+                firstName: user.name?.givenName,
+                lastName: user.name?.familyName
+            };
+        } else if response is scim:ErrorResponse {
+            log:printInfo(response.toString());
+            return {
+                errorCode: response.detail().status,
+                message: response.detail().detail
+            };
+        }
+        return {
+            errorCode: 500,
+            message: "Unknown error occurred"
+        };
+    }
+
     resource function get searchProfile(string email) returns json|error {
         
         log:printInfo("Search Profile: " + email + " ===============================");
         string userName = string `DEFAULT/${email}`;
-        scim:UserSearch searchData = { filter: string `userName eq ${userName}`, schemas: [] };
+        scim:UserSearch searchData = { filter: string `userName eq ${userName}` };
         scim:UserResponse|scim:ErrorResponse|error response = scimClient->searchUser(searchData);
         if response is scim:UserResponse {
             log:printInfo(response.toString());
